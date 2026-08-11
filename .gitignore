@@ -1,0 +1,17 @@
+# Foundry build artifacts
+**/out/
+**/cache/
+**/broadcast/
+
+# Secrets / local configuration
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local chain data
+.anvil/
