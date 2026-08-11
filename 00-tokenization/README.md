@@ -1,7 +1,5 @@
 # 00 — Tokenization
 
-**You can see a diagram of the concepts explored in this lesson in docs/**
-
 Foundry implementation of the Speedrun Ethereum tokenization challenge, focused on understanding ERC-721 state, ownership, authorization, and EVM execution rather than simply reproducing the reference implementation.
 
 ## What This Project Does
@@ -48,6 +46,10 @@ The local workflow was:
 This provided a second layer of validation beyond the isolated Foundry unit tests.
 
 ## Key Concepts Explored
+
+## Architecture
+
+[![Tokenization architecture](docs/00-diagram.svg)](docs/00-diagram.svg)
 
 ### Contract State
 
