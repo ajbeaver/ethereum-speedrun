@@ -4,14 +4,66 @@ pragma solidity ^0.8.35;
 import {Test} from "forge-std/Test.sol";
 import {Crowdfund} from "../src/Crowdfund.sol";
 
+contract RefundAttacker {
+	Crowdfund public crowdfund;
+	bool public attemptedReentry;
+
+	constructor(Crowdfund _crowdfund) {
+		crowdfund = _crowdfund;
+	}
+
+	function contribute() external payable {
+		crowdfund.contribute{value: msg.value}();
+	}
+
+	function attackRefund() external {
+		crowdfund.refund();
+	}
+
+	receive() external payable {
+		if (!attemptedReentry) {
+			attemptedReentry = true;
+
+			try crowdfund.refund() {
+			} catch {
+			}
+		}
+	}
+}
+
+contract WithdrawAttacker {
+	Crowdfund public crowdfund;
+	bool public attemptedReentry;
+
+	constructor() {
+		crowdfund = new Crowdfund(10 ether, 7 days);
+	}
+
+	function attackWithdraw() external {
+		crowdfund.withdraw();
+	}
+
+	receive() external payable {
+		if (!attemptedReentry) {
+			attemptedReentry = true;
+
+			try crowdfund.withdraw() {
+			} catch {
+			}
+		}
+	}
+}
+
 contract CrowdfundTest is Test {
 	Crowdfund crowdfund;
 
 	address beaver = address(0x1);
+	address bob = address(0x2);
 
 	function setUp() public {
 		crowdfund = new Crowdfund(10 ether, 7 days);
-		vm.deal(beaver, 100 ether);	
+		vm.deal(beaver, 100 ether);
+		vm.deal(bob, 100 ether);	
 	}
 
 	receive() external payable {}
@@ -147,5 +199,55 @@ contract CrowdfundTest is Test {
 	    vm.prank(beaver);
 	    vm.expectRevert();
 	    crowdfund.refund();
+	}
+
+	function testCannotContributeAtDeadline() public {
+		vm.warp(crowdfund.deadline());
+
+		vm.prank(beaver);
+		vm.expectRevert();
+
+		crowdfund.contribute{value: 10 ether}();
+	}
+
+	function testMultipleContributorsAccounting() public {
+		vm.prank(beaver);
+		crowdfund.contribute{value: 3 ether}();
+
+		vm.prank(bob);
+		crowdfund.contribute{value: 7 ether}();
+
+		assertEq(crowdfund.contributions(beaver), 3 ether);
+		assertEq(crowdfund.contributions(bob), 7 ether);
+		assertEq(address(crowdfund).balance, 10 ether);
+	}
+
+	function testRefundReentrancy() public {
+		RefundAttacker attacker = new RefundAttacker(crowdfund);
+
+		attacker.contribute{value: 3 ether}();
+
+		vm.warp(crowdfund.deadline());
+
+		attacker.attackRefund();
+
+		assertEq(address(attacker).balance, 3 ether);
+		assertEq(crowdfund.contributions(address(attacker)), 0);
+	}
+
+	function testWithdrawReentrancy() public {
+		WithdrawAttacker attacker = new WithdrawAttacker();
+		Crowdfund attackerCrowdfund = attacker.crowdfund();
+
+		vm.prank(beaver);
+		attackerCrowdfund.contribute{value: 10 ether}();
+
+		vm.warp(crowdfund.deadline());
+
+		attacker.attackWithdraw();
+
+		assertEq(address(attacker).balance, 10 ether);
+		assertEq(address(attackerCrowdfund).balance, 0);
+		assertTrue(attackerCrowdfund.withdrawn());
 	}
 }
